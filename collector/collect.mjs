@@ -20,14 +20,24 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const now = Date.now();
 const ymd = t => new Date(t).toISOString().slice(0, 10);
 
-async function jget(url, tries = 3) {
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await fetch(url, { headers: { "User-Agent": "RoScout-Collector/1.0" } });
-      if (r.status === 429) { await sleep(2000 * (i + 1)); continue; }
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return await r.json();
-    } catch (e) { if (i === tries - 1) return null; await sleep(700 * (i + 1)); }
+/* Chaîne d'hôtes : Roblox bloque parfois les IP des datacenters (dont GitHub),
+   donc chaque requête essaie roblox.com puis les relais publics. */
+const HOSTS = ["roblox.com", "roproxy.com", "ff-roproxy.com"];
+const errStats = {};
+async function jget(sub, path, tries = 2) {
+  for (const host of HOSTS) {
+    for (let i = 0; i < tries; i++) {
+      try {
+        const r = await fetch(`https://${sub}.${host}${path}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; RoScout/1.0)" } });
+        if (r.status === 429) { await sleep(2000 * (i + 1)); continue; }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return await r.json();
+      } catch (e) {
+        const k = sub + "@" + host + ":" + (e.message || e);
+        errStats[k] = (errStats[k] || 0) + 1;
+        await sleep(500 * (i + 1));
+      }
+    }
   }
   return null;
 }
@@ -64,7 +74,7 @@ const harvest = (arr, label) => (arr || []).forEach(g => {
 async function deepSort(sortId, label, pages) {
   let token = "";
   for (let p = 0; p < pages; p++) {
-    const c = await jget(`https://apis.roblox.com/explore-api/v1/get-sort-content?sessionId=${sid}&sortId=${encodeURIComponent(sortId)}&device=computer&country=all${token ? "&pageToken=" + encodeURIComponent(token) : ""}`);
+    const c = await jget("apis", `/explore-api/v1/get-sort-content?sessionId=${sid}&sortId=${encodeURIComponent(sortId)}&device=computer&country=all${token ? "&pageToken=" + encodeURIComponent(token) : ""}`);
     if (!c) break;
     harvest(c.games || c.sortContents, label);
     token = c.nextPageToken || c.nextPageCursor || "";
@@ -74,7 +84,7 @@ async function deepSort(sortId, label, pages) {
 try {
   let sorts = [], sTok = "";
   for (let p = 0; p < 2; p++) {
-    const d = await jget(`https://apis.roblox.com/explore-api/v1/get-sorts?sessionId=${sid}&device=computer&country=all${sTok ? "&sortsPageToken=" + encodeURIComponent(sTok) : ""}`);
+    const d = await jget("apis", `/explore-api/v1/get-sorts?sessionId=${sid}&device=computer&country=all${sTok ? "&sortsPageToken=" + encodeURIComponent(sTok) : ""}`);
     if (!d) break;
     sorts = sorts.concat(d.sorts || []);
     sTok = d.nextSortsPageToken || "";
@@ -93,25 +103,43 @@ try {
   const SEEDS = ["simulator","tycoon","obby","horror","anime","rp","battlegrounds","survival","escape","clicker","idle","tower defense","fishing","farm","racing","story","brainrot","pet","steal","grow"];
   const picked = SEEDS.slice(state.run % 4 * 5, state.run % 4 * 5 + 5);
   await pMap(picked, async q => {
-    const d = await jget(`https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(q)}&sessionId=${sid}&pageType=all`);
+    const d = await jget("apis", `/search-api/omni-search?searchQuery=${encodeURIComponent(q)}&sessionId=${sid}&pageType=all`);
     (d?.searchResults || []).forEach(sr => harvest(sr.contents, "🔎 " + q));
   }, 4);
   /* radar : recommandations depuis les jeux jeunes de l'univers */
   const young = Object.values(universe).filter(g => (now - new Date(g.created)) / 864e5 < 45)
     .sort((a, b) => new Date(b.created) - new Date(a.created)).slice(0, 30);
   await pMap(young, async g => {
-    const j = await jget(`https://games.roblox.com/v1/games/recommendations/game/${g.universeId}?maxRows=12`);
+    const j = await jget("games", `/v1/games/recommendations/game/${g.universeId}?maxRows=12`);
     harvest(j?.games || j?.data, "🧭 Radar");
   }, 5);
 } catch (e) { console.error("découverte:", e.message); }
 console.log("découverte:", found.size, "jeux vus");
+/* graines de secours : si la découverte est maigre (API bloquée ?), on part de gros jeux
+   connus et le spider de recommandations élargira depuis eux au fil des runs */
+if (found.size < 100) {
+  const SEED_PLACES = [2753915549, 920587237, 4924922222, 142823291, 606849621, 15101393044, 16732694052, 6516141723, 1962086868, 13772394625, 10449761463, 8737899170];
+  await pMap(SEED_PLACES, async pid => {
+    const d = await jget("apis", `/universes/v1/places/${pid}/universe`);
+    if (d?.universeId && !found.has(d.universeId)) found.set(d.universeId, "Graine");
+  }, 5);
+  const seedUids = [...found.keys()].slice(0, 40);
+  for (let hop = 0; hop < 2; hop++) {
+    const before = found.size;
+    await pMap(seedUids.concat([...found.keys()].slice(-40)), async uid => {
+      const j = await jget("games", `/v1/games/recommendations/game/${uid}?maxRows=12`);
+      harvest(j?.games || j?.data, "🧭 Radar");
+    }, 5);
+    console.log("secours saut", hop + 1, ":", found.size, "jeux (", found.size - before, "nouveaux )");
+  }
+}
 
 /* ---------- 2) SÉLECTION DES JEUX À RAFRAÎCHIR ---------- */
 const trackedUids = [];
 await pMap(tracked.placeIds || [], async pid => {
   const known = Object.values(universe).find(g => g.placeId === pid);
   if (known) { trackedUids.push(known.universeId); return; }
-  const d = await jget(`https://apis.roblox.com/universes/v1/places/${pid}/universe`);
+  const d = await jget("apis", `/universes/v1/places/${pid}/universe`);
   if (d?.universeId) trackedUids.push(d.universeId);
 }, 5);
 const priority = [...new Set([
@@ -132,8 +160,8 @@ console.log("à rafraîchir:", uids.length, "(priorité:", priority.length, ")")
 
 /* ---------- 3) STATS + VOTES ---------- */
 const chunks = []; for (let i = 0; i < uids.length; i += 60) chunks.push(uids.slice(i, i + 60));
-const gd = (await pMap(chunks, c => jget(`https://games.roblox.com/v1/games?universeIds=${c.join(",")}`), 8)).flatMap(p => p?.data || []);
-const vd = (await pMap(chunks, c => jget(`https://games.roblox.com/v1/games/votes?universeIds=${c.join(",")}`), 8)).flatMap(p => p?.data || []);
+const gd = (await pMap(chunks, c => jget("games", `/v1/games?universeIds=${c.join(",")}`), 8)).flatMap(p => p?.data || []);
+const vd = (await pMap(chunks, c => jget("games", `/v1/games/votes?universeIds=${c.join(",")}`), 8)).flatMap(p => p?.data || []);
 const votes = {}; vd.forEach(v => votes[v.id] = v);
 if (!gd.length) { console.error("Aucune donnée reçue — abandon du run."); process.exit(0); }
 
@@ -188,13 +216,13 @@ for (const sh of shards) for (const uid of Object.keys(sh)) {
 const needGroups = [...new Set(gd.filter(g => g.creator?.type === "Group").map(g => g.creator.id))]
   .filter(id => !groups[id] || now - groups[id].t > 3 * 864e5).slice(0, 120);
 await pMap(needGroups, async id => {
-  const g = await jget(`https://groups.roblox.com/v1/groups/${id}`);
+  const g = await jget("groups", `/v1/groups/${id}`);
   if (!g) return;
   let d = null;
   const m = (g.description || "").match(/(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord\.com\/invite)\/[\w-]+/i);
   if (m) d = m[0].startsWith("http") ? m[0] : "https://" + m[0];
   if (!d) {
-    const s = await jget(`https://groups.roblox.com/v1/groups/${id}/social-links`);
+    const s = await jget("groups", `/v1/groups/${id}/social-links`);
     const l = (s?.data || []).find(x => (x.type || "").toLowerCase() === "discord");
     if (l) d = l.url;
   }
@@ -272,4 +300,6 @@ await saveJson(`${DATA}/universe.json`, universe);
 await saveJson(`${DATA}/groups.json`, groups);
 await saveJson(`${DATA}/state.json`, state);
 for (let s = 0; s < SHARDS; s++) await saveJson(`${DATA}/hist-${s}.json`, shards[s]);
+const topErrs = Object.entries(errStats).sort((a,b)=>b[1]-a[1]).slice(0,6);
+if (topErrs.length) console.log("⚠️ erreurs réseau rencontrées:", topErrs.map(([k,v])=>k+" ×"+v).join(" · "));
 console.log("✅ run terminé — univers:", Object.keys(universe).length, "jeux · exportés pour le site:", topList.length);
