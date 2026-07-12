@@ -1,0 +1,4 @@
+{
+  "_comment": "Ajoute ici les placeIds des jeux que tu veux que le collecteur suive 24h/24 même s'ils sortent des charts. Le placeId est le nombre dans l'URL roblox.com/games/CE-NOMBRE/...",
+  "placeIds": []
+}

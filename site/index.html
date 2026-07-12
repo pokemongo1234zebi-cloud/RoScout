@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoScout — tracker & scouting de jeux Roblox</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1117; --panel: #161b26; --panel-hi: #1d2432; --line: #262e40;
+    --text: #e9edf5; --mut: #8b95a9; --accent: #35c9a2; --blue: #4a7dff;
+    --green: #2ecc80; --red: #ff5c72; --gold: #ffc14d; --discord: #5865F2;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: "Inter","Segoe UI",system-ui,sans-serif; font-size: 14px; }
+  a { color: var(--blue); text-decoration: none; }
+  .mono { font-family: ui-monospace,"SF Mono",Consolas,monospace; font-variant-numeric: tabular-nums; }
+
+  .topbar { border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 20; }
+  .topbar-in { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .logo { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+  .logo span { color: var(--accent); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .sub { color: var(--mut); font-size: 11.5px; }
+
+  .tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .tab { padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 13px; color: var(--mut); cursor: pointer; border: 1px solid transparent; background: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); background: rgba(53,201,162,.1); border-color: rgba(53,201,162,.35); }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 18px 16px 70px; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .controls input[type=text] { background: var(--panel); border: 1px solid var(--line); color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 13px; }
+  #searchInput { width: 200px; }
+  #addInput { flex: 1; min-width: 220px; }
+  .btn { background: var(--accent); color: #06251c; border: none; padding: 9px 15px; border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer; }
+  .btn.ghost { background: var(--panel); border: 1px solid var(--line); color: var(--mut); }
+  .btn:hover { filter: brightness(1.12); }
+
+  .scout-bar { display: none; align-items: center; gap: 12px; background: rgba(53,201,162,.07); border: 1px solid rgba(53,201,162,.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; flex-wrap: wrap; }
+  .scout-bar.show { display: flex; }
+  .scout-bar .t { font-weight: 800; color: var(--accent); }
+  .scout-bar label { color: var(--mut); font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+  .scout-bar input[type=range] { accent-color: var(--accent); }
+  .scout-bar .hint { font-size: 11.5px; color: var(--mut); width: 100%; }
+
+  #status { font-size: 12px; color: var(--mut); margin-bottom: 10px; min-height: 16px; }
+  #status.err { color: var(--red); }
+
+  .tablebox { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 1180px; }
+  th { text-align: right; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); padding: 11px 12px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap; }
+  th.l { text-align: left; }
+  th.sorted { color: var(--accent); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  td.l { text-align: left; }
+  tr.g:hover { background: var(--panel-hi); cursor: pointer; }
+  tr:last-child td { border-bottom: none; }
+  .rank { color: var(--mut); font-size: 12px; width: 34px; }
+
+  .gcell { display: flex; align-items: center; gap: 10px; min-width: 260px; }
+  .gcell img { width: 40px; height: 40px; border-radius: 8px; background: #0a0d13; flex-shrink: 0; }
+  .gname { font-weight: 700; font-size: 13.5px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+  .gby { font-size: 11px; color: var(--mut); }
+  .chips { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+  .chip { font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 12px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip.discord { background: var(--discord); color: #fff; }
+  .chip.new { background: rgba(74,125,255,.16); color: #8fadff; }
+  .chip.chart { background: rgba(53,201,162,.14); color: var(--accent); }
+  .chip.gem { background: rgba(255,193,77,.16); color: var(--gold); }
+
+  .delta { font-weight: 800; }
+  .up { color: var(--green); } .down { color: var(--red); } .flat { color: var(--mut); }
+  .pot { font-weight: 800; }
+  .pot.hi { color: var(--green); } .pot.mid { color: var(--gold); } .pot.lo { color: var(--mut); }
+  .star { background: none; border: none; font-size: 16px; cursor: pointer; opacity: .35; }
+  .star.on { opacity: 1; }
+  .spark { display: inline-block; vertical-align: middle; }
+
+  .why { text-align: left; font-size: 10.5px; color: var(--mut); max-width: 230px; white-space: normal; line-height: 1.5; }
+  .why b { color: var(--accent); }
+
+  .empty { padding: 40px; text-align: center; color: var(--mut); font-size: 13px; line-height: 1.7; }
+
+  /* Modal (fiche jeu style dashboard Roblox) */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 30px 14px; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 880px; padding: 22px; }
+  .modal-head { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .modal-head img { width: 100px; height: 100px; border-radius: 12px; background: #0a0d13; }
+  .modal-head h2 { font-size: 21px; font-weight: 800; }
+  .modal-head .by { color: var(--mut); font-size: 13px; margin-top: 4px; }
+  .close { margin-left: auto; background: var(--panel); border: 1px solid var(--line); color: var(--mut); border-radius: 8px; width: 34px; height: 34px; font-size: 15px; cursor: pointer; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; margin: 18px 0 10px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
+  .stat .v { font-size: 19px; font-weight: 800; }
+  .stat .l2 { color: var(--mut); font-size: 10.5px; margin-top: 3px; text-transform: uppercase; letter-spacing: .05em; }
+  .vote-wrap { margin: 8px 0 16px; }
+  .vote-nums { display: flex; justify-content: space-between; font-size: 12px; color: var(--mut); margin-bottom: 5px; }
+  .vote-bar { height: 8px; border-radius: 4px; background: var(--red); overflow: hidden; }
+  .vote-bar div { height: 100%; background: var(--green); }
+  .stitle { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); margin: 18px 0 8px; }
+  .chart-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; height: 230px; position: relative; }
+  .chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--mut); font-size: 12px; pointer-events: none; line-height: 1.6; }
+  .score-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .score-row .lab { font-size: 11.5px; color: var(--mut); width: 190px; flex-shrink: 0; }
+  .score-row .bar { flex: 1; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .score-row .bar div { height: 100%; background: var(--accent); }
+  .score-row .val { font-size: 11.5px; width: 36px; text-align: right; }
+  .group-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .discord-link { display: inline-flex; align-items: center; gap: 6px; background: var(--discord); color: #fff; font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 8px; margin-left: auto; }
+  .no-discord { color: var(--mut); font-size: 12px; margin-left: auto; }
+  .desc { color: var(--mut); font-size: 13px; line-height: 1.55; white-space: pre-wrap; max-height: 130px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .play-link { display: inline-block; margin-top: 14px; background: var(--green); color: #05230f; font-weight: 800; padding: 10px 22px; border-radius: 8px; }
+  .helpbox { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--mut); line-height: 1.7; display: none; margin-bottom: 14px; }
+  .helpbox.show { display: block; }
+  .helpbox b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <div class="logo">Ro<span>Scout</span></div>
+  <span class="live-dot"></span>
+  <span class="sub" id="lastUpdate">connexion à l'API Roblox…</span>
+  <span class="sub" id="countdown" style="color:var(--accent)"></span>
+  <nav class="tabs">
+    <button class="tab active" data-tab="scout" onclick="setTab('scout')">🎯 Scouting</button>
+    <button class="tab" data-tab="picks" onclick="setTab('picks')">🏅 Top picks</button>
+    <button class="tab" data-tab="lt" onclick="setTab('lt')">🌱 Long terme</button>
+    <button class="tab" data-tab="trend" onclick="setTab('trend')">🔥 Tendances</button>
+    <button class="tab" data-tab="top" onclick="setTab('top')">🏆 Top joueurs</button>
+    <button class="tab" data-tab="watch" onclick="setTab('watch')">⭐ Ma watchlist</button>
+  </nav>
+</div></div>
+
+<div class="wrap">
+  <div class="helpbox" id="helpbox">
+    <b>⚠️ Impossible de contacter l'API Roblox.</b><br>
+    L'app essaie automatiquement 4 relais (RoProxy, FF-RoProxy, AllOrigins, CorsProxy). Si tu vois ce message :
+    1. ouvre bien le fichier <b>dans ton navigateur</b> · 2. vérifie ta connexion et désactive un éventuel bloqueur de pub ·
+    3. clique sur <b>↻ Actualiser</b> (les relais publics saturent parfois) · 4. sinon, envoie-moi l'erreur de la console (clic droit → Inspecter → Console).
+  </div>
+
+  <div class="scout-bar show" id="scoutBar">
+    <span class="t">🎯 Mode scouting</span>
+    <label>Sortis il y a moins de
+      <input type="range" id="ageRange" min="1" max="180" step="1" value="60" oninput="document.getElementById('ageVal').textContent=this.value; render()">
+      <b id="ageVal" style="color:var(--text)">60</b> jours
+    </label>
+    <label>Joueurs min.
+      <input type="range" id="ccuRange" min="0" max="500" step="5" value="5" oninput="document.getElementById('ccuVal').textContent=this.value; render()">
+      <b id="ccuVal" style="color:var(--text)">5</b>
+    </label>
+    <label>Joueurs max.
+      <input type="range" id="ccuMaxRange" min="50" max="5000" step="50" value="1000" oninput="document.getElementById('ccuMaxVal').textContent=this.value>=5000?'∞':this.value; render()">
+      <b id="ccuMaxVal" style="color:var(--text)">1000</b>
+    </label>
+    <span class="hint">Les jeux les plus récents en haut. 💎 = petit jeu récent très bien noté. Clique sur un jeu pour voir sa fiche complète et sa courbe. Clique sur ⭐ pour le garder dans ta watchlist.</span>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="🔍 Filtrer…" oninput="render()">
+    <input type="text" id="addInput" placeholder="Suivre un jeu précis : colle le lien roblox.com/games/… ou son ID">
+    <button class="btn" onclick="addGame()">+ Suivre</button>
+    <button class="btn ghost" id="detailBtn" onclick="toggleDetail()">📊 Plus de stats</button>
+    <button class="btn ghost" onclick="refreshAll(true)">↻ Actualiser</button>
+  </div>
+  <div id="status"></div>
+  <div class="tablebox"><div id="tableWrap"></div></div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+/* ================================================================
+   Données 100% réelles via l'API Roblox, relayée par une chaîne
+   de proxys CORS (Roblox bloque les appels directs du navigateur)
+   ================================================================ */
+function proxyUrls(host, path) {
+  const direct = `https://${host}.roblox.com${path}`;
+  return [
+    `https://${host}.roproxy.com${path}`,
+    `https://${host}.ff-roproxy.com${path}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(direct)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(direct)}`,
+  ];
+}
+let preferredProxy = 0;
+const PROXY_NAMES = ["RoProxy", "FF-RoProxy", "AllOrigins", "CorsProxy"];
+/* exécute une liste de tâches avec au plus `limit` en parallèle (évite le blocage des relais) */
+async function pMap(items, fn, limit = 6) {
+  const out = new Array(items.length); let i = 0;
+  await Promise.all(Array(Math.min(limit, items.length)).fill().map(async () => {
+    while (i < items.length) { const idx = i++; try { out[idx] = await fn(items[idx], idx); } catch(e) { out[idx] = null; } }
+  }));
+  return out;
+}
+async function robloxGet(host, path) {
+  const urls = proxyUrls(host, path);
+  const order = [preferredProxy, ...[0,1,2,3].filter(i => i !== preferredProxy)];
+  let lastErr = null;
+  for (const i of order) {
+    try {
+      const ctl = new AbortController();
+      const to = setTimeout(() => ctl.abort(), 9000);
+      const r = await fetch(urls[i], { signal: ctl.signal });
+      clearTimeout(to);
+      if (!r.ok) { lastErr = new Error("HTTP " + r.status); continue; }
+      const j = await r.json();
+      if (j && typeof j === "object") { preferredProxy = i; return j; }
+    } catch(e) { lastErr = e; }
+  }
+  throw lastErr || new Error("échec réseau");
+}
+
+/* Secours si les charts sont injoignables (placeIds réels) */
+const FALLBACK_PLACES = [2753915549, 920587237, 4924922222, 142823291, 606849621, 15101393044, 16732694052, 6516141723, 1962086868, 13772394625, 10449761463, 8737899170];
+
+/* ---------- état ---------- */
+let games = [], history = {}, watchlist = [], placeToUniverse = {}, chart = null, chart2 = null, openId = null;
+let gameStore = {}; // 🌌 univers cumulatif : chaque jeu jamais croisé, persistant (max 5000)
+const iconCache = {}; // les icônes ne changent presque jamais : on évite de les redemander
+let youngPool = []; // vivier persistant de jeunes jeux découverts par le radar
+let currentTab = "scout";
+let sortKey = null, sortDir = -1;
+let detailedView = false;
+function toggleDetail() {
+  detailedView = !detailedView;
+  document.getElementById("detailBtn").textContent = detailedView ? "📊 Moins de stats" : "📊 Plus de stats";
+  render();
+}
+
+function loadStore() {
+  try {
+    watchlist = JSON.parse(localStorage.getItem("rs_watch")) || [];
+    youngPool = JSON.parse(localStorage.getItem("rs_young")) || [];
+    /* univers cumulatif (format compact en tableaux) */
+    (JSON.parse(localStorage.getItem("rs_games")) || []).forEach(a => {
+      gameStore[a[0]] = {
+        universeId: a[0], placeId: a[1], name: a[2],
+        creator: a[3] ? { id: a[3].i, name: a[3].n, type: a[3].t } : null,
+        playing: a[4], visits: a[5], favorites: a[6], created: a[7], updated: a[8],
+        up: a[9], down: a[10], chart: a[11], lastSeen: a[12],
+        genre: a[13] || "", maxPlayers: a[14] || null, desc: "", icon: "", discord: null,
+      };
+    });
+    games = Object.values(gameStore);
+    const raw = JSON.parse(localStorage.getItem("rs_history")) || {};
+    history = {};
+    for (const uid of Object.keys(raw)) {
+      history[uid] = raw[uid].map(p => Array.isArray(p)
+        ? { t: p[0], ccu: p[1], visits: p[2], favs: p[3], up: p[4]||0, down: p[5]||0 }
+        : { up: 0, down: 0, ...p });
+    }
+    placeToUniverse = JSON.parse(localStorage.getItem("rs_map")) || {};
+  } catch(e) {}
+}
+function packHistory() {
+  const out = {};
+  for (const uid of Object.keys(history)) out[uid] = history[uid].map(p => [p.t, p.ccu, p.visits, p.favs, p.up||0, p.down||0]);
+  return out;
+}
+function saveStore() {
+  try {
+    /* élagage : 200 points pour la watchlist, 60 pour les autres ; historiques non vus depuis 7 jours jetés */
+    const limit = Date.now() - 7*86400000;
+    const watchUids = new Set(watchlist.map(p => placeToUniverse[p]).filter(Boolean).map(String));
+    for (const uid of Object.keys(history)) {
+      let h = history[uid];
+      if (!h.length || h[h.length-1].t < limit) { delete history[uid]; continue; }
+      const cap = watchUids.has(String(uid)) ? 200 : 60;
+      if (h.length > cap) history[uid] = h.slice(-cap);
+    }
+    localStorage.setItem("rs_watch", JSON.stringify(watchlist));
+    localStorage.setItem("rs_young", JSON.stringify(youngPool));
+    /* univers cumulatif, compacté en tableaux pour tenir dans le quota */
+    try {
+      localStorage.setItem("rs_games", JSON.stringify(Object.values(gameStore).map(g =>
+        [g.universeId, g.placeId, g.name, g.creator ? { i: g.creator.id, n: g.creator.name, t: g.creator.type } : null,
+         g.playing, g.visits, g.favorites, g.created, g.updated, g.up, g.down, g.chart, g.lastSeen, g.genre, g.maxPlayers])));
+    } catch(q) {
+      /* quota : on ne garde que les 2500 plus récents */
+      const keep = Object.values(gameStore).sort((a,b) => b.lastSeen - a.lastSeen).slice(0, 2500);
+      try { localStorage.setItem("rs_games", JSON.stringify(keep.map(g =>
+        [g.universeId, g.placeId, g.name, g.creator ? { i: g.creator.id, n: g.creator.name, t: g.creator.type } : null,
+         g.playing, g.visits, g.favorites, g.created, g.updated, g.up, g.down, g.chart, g.lastSeen, g.genre, g.maxPlayers]))); } catch(e) {}
+    }
+    try {
+      localStorage.setItem("rs_history", JSON.stringify(packHistory()));
+    } catch(q) {
+      /* quota dépassé : on divise les historiques par deux et on réessaie */
+      for (const uid of Object.keys(history)) history[uid] = history[uid].filter((_, i) => i % 2 === 1);
+      try { localStorage.setItem("rs_history", JSON.stringify(packHistory())); } catch(e) {}
+    }
+    localStorage.setItem("rs_map", JSON.stringify(placeToUniverse));
+  } catch(e) {}
+}
+
+const fmt = n => n == null ? "—" : n >= 1e9 ? (n/1e9).toFixed(2)+" Md" : n >= 1e6 ? (n/1e6).toFixed(1)+" M" : n >= 1e3 ? (n/1e3).toFixed(1).replace(".0","")+" k" : String(n);
+const esc = s => String(s??"").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const ageDays = g => (Date.now() - new Date(g.created)) / 86400000;
+const setStatus = (msg, err=false) => { const s = document.getElementById("status"); s.textContent = msg; s.className = err ? "err" : ""; };
+
+/* ---------- charts officiels Roblox (tendances auto + pépites) ---------- */
+async function fetchTrendingUniverses() {
+  const sid = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+  const found = new Map();
+  const harvest = (arr, label) => (arr || []).forEach(g => {
+    const uid = g.universeId || g.universeID || g.id;
+    if (uid && !found.has(uid)) found.set(uid, label);
+  });
+  /* va chercher plusieurs pages d'un classement (les petits jeux sont au fond) */
+  async function deepFetch(sortId, label, pages) {
+    let token = "";
+    for (let p = 0; p < pages; p++) {
+      try {
+        const c = await robloxGet("apis", `/explore-api/v1/get-sort-content?sessionId=${sid}&sortId=${encodeURIComponent(sortId)}&device=computer&country=all${token ? "&pageToken=" + encodeURIComponent(token) : ""}`);
+        harvest(c.games || c.sortContents, label);
+        token = c.nextPageToken || c.nextPageCursor || "";
+        if (!token) break;
+      } catch(e) { break; }
+    }
+  }
+  try {
+    /* récupère la liste des classements (2 pages de sorts) */
+    let sorts = [], sTok = "";
+    for (let p = 0; p < 2; p++) {
+      const d = await robloxGet("apis", `/explore-api/v1/get-sorts?sessionId=${sid}&device=computer&country=all${sTok ? "&sortsPageToken=" + encodeURIComponent(sTok) : ""}`);
+      sorts = sorts.concat(d.sorts || []);
+      sTok = d.nextSortsPageToken || "";
+      if (!sTok) break;
+    }
+    const labelOf = s => s.sortDisplayName || s.sortId;
+    /* 1) PRIORITÉ pépites : classements "essor / up-and-coming / nouveau" — 12 pages de profondeur */
+    const gems = sorts.filter(s => /up.?and.?coming|essor|rising|new|nouveau|émergent|emerging/i.test((s.sortId||"") + " " + (s.sortDisplayName||"")));
+    gems.forEach(s => harvest(s.games, labelOf(s)));
+    await pMap(gems.filter(s => s.sortId), s => deepFetch(s.sortId, labelOf(s), 12), 4);
+    /* 2) tendances & top classiques : 2 pages */
+    const classics = sorts.filter(s => !gems.includes(s) && /trend|tendance|playing|populaire|top/i.test((s.sortId||"") + " " + (s.sortDisplayName||"")));
+    classics.forEach(s => harvest(s.games, labelOf(s)));
+    await pMap(classics.filter(s => s.sortId), s => deepFetch(s.sortId, labelOf(s), 2), 4);
+    /* 3) classements par genre & niches : 5 pages — plein de petits jeux dedans */
+    const niches = sorts.filter(s => !gems.includes(s) && !classics.includes(s));
+    niches.forEach(s => harvest(s.games, labelOf(s)));
+    await pMap(niches.filter(s => s.sortId && found.size < 800), s => deepFetch(s.sortId, labelOf(s), 5), 4);
+    /* 4) recherche par mots-clés : fait remonter des jeux hors classements */
+    const SEEDS = ["simulator","tycoon","obby","horror","anime","rp","battlegrounds","survival","escape","clicker","idle","tower defense","fishing","farm","racing","story","brainrot","pet"];
+    const picked = SEEDS.sort(() => Math.random() - .5).slice(0, 8);
+    await pMap(picked, async q => {
+      const d = await robloxGet("apis", `/search-api/omni-search?searchQuery=${encodeURIComponent(q)}&sessionId=${sid}&pageType=all`);
+      (d.searchResults || []).forEach(sr => harvest(sr.contents, "🔎 " + q));
+    }, 4);
+    /* 5) jeux similaires aux pépites déjà trouvées (élargit vers des petits jeux du même style) */
+    const seedsUids = [...found.keys()].sort(() => Math.random() - .5).slice(0, 12);
+    await pMap(seedsUids, async uid => {
+      const j = await robloxGet("games", `/v1/games/recommendations/game/${uid}?maxRows=8`);
+      harvest(j.games || j.data, "Similaire");
+    }, 4);
+  } catch(e) { console.warn("charts indisponibles:", e); }
+  return found;
+}
+
+/* ---------- résolution placeId -> universeId (watchlist) ---------- */
+async function resolveUniverses(placeIds) {
+  const missing = placeIds.filter(p => !placeToUniverse[p]);
+  await Promise.allSettled(missing.map(async pid => {
+    const d = await robloxGet("apis", `/universes/v1/places/${pid}/universe`);
+    if (d.universeId) placeToUniverse[pid] = d.universeId;
+  }));
+  saveStore();
+  return placeIds.map(p => placeToUniverse[p]).filter(Boolean);
+}
+
+/* ---------- Discord du groupe (cache persistant, requêtes par petits lots) ---------- */
+let discordCache = {};
+try { discordCache = JSON.parse(localStorage.getItem("rs_discord")) || {}; } catch(e) {}
+function saveDiscordCache() { try { localStorage.setItem("rs_discord", JSON.stringify(discordCache)); } catch(e) {} }
+async function fetchDiscord(groupId) {
+  if (groupId in discordCache) return discordCache[groupId];
+  let res = { has: false, url: null, group: null };
+  try {
+    const g = await robloxGet("groups", `/v1/groups/${groupId}`);
+    res.group = { name: g.name, members: g.memberCount };
+    const m = (g.description || "").match(/(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord\.com\/invite)\/[\w-]+/i);
+    if (m) { res.has = true; res.url = m[0].startsWith("http") ? m[0] : "https://" + m[0]; }
+  } catch(e) {}
+  if (!res.has) {
+    try {
+      const s = await robloxGet("groups", `/v1/groups/${groupId}/social-links`);
+      const d = (s.data || []).find(x => (x.type || "").toLowerCase() === "discord");
+      if (d) { res.has = true; res.url = d.url; }
+    } catch(e) {}
+  }
+  discordCache[groupId] = res;
+  saveDiscordCache();
+  return res;
+}
+
+/* ---------- tendance & scores (calculés sur l'historique réel) ---------- */
+function trendPct(g, hours=24) {
+  if (hours <= 24) return g.sT24 ?? null;
+  return g.sT72 ?? g.sT24 ?? null;
+}
+/* Stats détaillées calculées sur la fenêtre des 72 dernières heures d'instantanés RÉELS.
+   - visites/favoris/likes gagnés : différence exacte entre instantanés (extrapolée à 72h si l'historique est plus court)
+   - session moyenne : estimation standard = (joueurs moyens × durée observée) ÷ nouvelles visites
+   - revenus : ESTIMATION grossière (Roblox ne publie pas les revenus) basée sur une fourchette
+     communautaire de ~1,5 à 4,5 Robux par joueur-heure, convertie en $ au taux DevEx (0,0038 $/R$) */
+function windowStats(g, hours=72) {
+  if (g.sAvgCcu == null) return null;
+  const r = monetRate(g);
+  return {
+    spanH: g.sHistH || 0, avgCcu: g.sAvgCcu, sessionMin: g.sSession,
+    visits72: g.sV72 ?? 0, favs72: g.sF72 ?? 0, likes72: 0,
+    revLo: Math.round(g.sAvgCcu * r.lo * 3), revHi: Math.round(g.sAvgCcu * r.hi * 3),
+    usdLo: g.sAvgCcu * r.lo * 3 * R2USD, usdHi: g.sAvgCcu * r.hi * 3 * R2USD,
+    partial: (g.sHistH || 0) < 65,
+  };
+}
+const fmtMin = m => m == null ? "—" : m >= 60 ? (m/60).toFixed(1) + " h" : Math.round(m) + " min";
+const fmtRev = w => w == null ? "—" : `≈ ${fmt(w.revLo)}–${fmt(w.revHi)} R$`;
+/* ================================================================
+   💵 TAUX DE MONÉTISATION PAR GENRE — recalibrés sur les benchmarks
+   réels du marché (ARPDAU nets développeur, DAU ≈ 4× CCU) :
+   · simulateurs/tycoons/pets/RPG/fishing : convertissent 2-3% → haut
+   · brainrot/steal-a-X : forte pression d'achat (lucky blocks…) → mi-haut
+   · social/RP : conversion 1-2% mais Premium Payouts (longues sessions)
+   · obby/idle : les plus durs à monétiser → bas
+   Résultat en R$ NETS (après les 30% de Roblox) par joueur simultané
+   et par JOUR. Un dev qui update chaque semaine gagne 30-50% de plus.
+   ================================================================ */
+function monetRate(g) {
+  const themes = detectThemes(g).map(t => t.label);
+  let lo = 4, hi = 16; // défaut : profil moyen
+  if (themes.some(x => /Simulator|Tycoon|Pets|Anime|Fishing|Échange|Grow/i.test(x))) { lo = 8; hi = 26; }
+  else if (themes.some(x => /Brainrot|Steal-a-X|Horreur|FPS|Sport|Fashion/i.test(x))) { lo = 6; hi = 20; }
+  else if (themes.some(x => /Social|RP/i.test(x))) { lo = 4; hi = 16; }
+  else if (themes.some(x => /Obby|Idle|Escape/i.test(x))) { lo = 3; hi = 10; }
+  /* cadence de mises à jour : effet mesuré de 30-50% sur les revenus à CCU égal */
+  const dUp = (Date.now() - new Date(g.updated)) / 864e5;
+  const mult = (dUp <= 14 ? 1.2 : dUp > 45 ? 0.7 : 1) * (g.up + g.down > 0 && g.up/(g.up+g.down) >= .90 ? 1.15 : 1);
+  return { lo: lo * mult, hi: hi * mult, gf: Math.max(0.5, Math.min(1.5, (lo + hi) / 2 / 12)) };
+}
+/* Estimations de revenus INSTANTANÉES (aucun historique requis) — fourchettes nettes */
+function revEst(g) {
+  const r = monetRate(g);
+  const dayLo = g.playing * r.lo, dayHi = g.playing * r.hi;
+  return {
+    dayLo, dayHi, monthLo: dayLo * 30, monthHi: dayHi * 30,
+    lifeLo: g.visits * 0.4 * r.gf, lifeHi: g.visits * 2.0 * r.gf, // ~0,5-2,5 R$ nets/visite selon le genre
+  };
+}
+const R2USD = 0.0038; // taux DevEx
+const fmtRange = (lo, hi, unit="R$") => `≈ ${fmt(Math.round(lo))}–${fmt(Math.round(hi))} ${unit}`;
+const fmtUsd = (lo, hi) => `~${fmt(Math.round(lo*R2USD))}–${fmt(Math.round(hi*R2USD))} $`;
+
+/* Projection ESTIMATIVE des joueurs actifs sur 7 jours :
+   part de la tendance réellement mesurée (72h max) avec amortissement progressif,
+   et une bande d'incertitude qui s'élargit avec le temps. Pas une prédiction fiable. */
+function buildProjection(g) {
+  const h = (history[g.universeId] || []).slice(-30);
+  const labels = h.map(p => new Date(p.t).toLocaleString("fr-FR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}));
+  const histVals = h.map(p => p.ccu);
+  const last = histVals.length ? histVals[histVals.length - 1] : g.playing;
+  let daily = 0, measured = false, shortHist = false;
+  if (h.length >= 3) {
+    const spanH = Math.max(0.1, (h[h.length-1].t - h[0].t) / 3600e3);
+    /* moyenne des 3 premiers vs 3 derniers points : lisse le bruit des extrémités */
+    const a = histVals.slice(0, 3).reduce((s,v)=>s+v,0) / 3;
+    const b = histVals.slice(-3).reduce((s,v)=>s+v,0) / 3;
+    if (spanH < 6 || a <= 0) {
+      /* moins de 6h d'historique : impossible de distinguer une vraie tendance
+         du cycle jour/nuit (les joueurs dorment !) → projection plate, incertitude large */
+      daily = 0; shortHist = true;
+    } else {
+      /* taux journalier lissé, pondéré par une confiance quadratique
+         (pleine confiance seulement à partir de 48h de données) */
+      const rawDaily = ((b - a) / a) / (spanH / 24);
+      const conf = Math.min(1, spanH / 48);
+      daily = rawDaily * conf * conf;
+      measured = spanH >= 20;
+      if (spanH < 20) shortHist = true;
+    }
+  } else { shortHist = true; }
+  daily = Math.max(-0.20, Math.min(0.60, daily)); // borné à -20%/+60% par jour
+  const proj = [], hi = [], lo = [];
+  let v = last;
+  for (let d = 1; d <= 7; d++) {
+    v = Math.max(0, v * (1 + daily * Math.exp(-d / 5))); // la tendance s'essouffle avec le temps
+    const unc = (shortHist ? 0.30 : 0.15) + 0.07 * d; // incertitude croissante, plus large si peu de données
+    proj.push(Math.round(v)); hi.push(Math.round(v * (1 + unc))); lo.push(Math.round(Math.max(0, v * (1 - unc))));
+  }
+  const pad = n => new Array(n).fill(null);
+  const n = Math.max(1, histVals.length);
+  return {
+    labels: [...(labels.length ? labels : ["maintenant"]), ...Array.from({length: 7}, (_, i) => "+" + (i+1) + " j")],
+    hist: [...(histVals.length ? histVals : [last]), ...pad(7)],
+    proj: [...pad(n - 1), last, ...proj],
+    hi:   [...pad(n - 1), last, ...hi],
+    lo:   [...pad(n - 1), last, ...lo],
+    measured, shortHist,
+  };
+}
+
+/* taux de croissance journalier mesuré, lissé et amorti (même logique que la projection 7j) */
+function measuredDaily(g) {
+  const h = g.sHistH || 0;
+  if (h < 6 || g.sT72 == null) return { daily: 0, conf: 0 };
+  const conf = Math.min(1, h / 48);
+  return { daily: Math.max(-0.20, Math.min(0.60, (g.sT72 / 100) / (h / 24) * conf * conf)), conf };
+}
+
+/* ================================================================
+   📅 TRAJECTOIRE 6 MOIS (CCU + revenus, mois par mois)
+   Modèle basé sur l'analyse du marché Roblox 2026 :
+   1) PHASE DE CROISSANCE G : élan mesuré dans les données + boost si
+      méta virale (brainrot, steal-a-X, escape) ET jeu jeune (l'algo
+      pousse fort les nouveautés qui accrochent) + engagement élevé.
+      Cette phase s'essouffle vite (e^-(k-1)/1.2).
+   2) PHASE DE DÉCLIN λ = 0.6(1-L) : L = longévité selon la méta
+      (social/échange/pets/fishing durent · brainrot/steal-a-X = cycles
+      courts · RNG/admin = hype éclair), la note, l'âge, la dynamique.
+   CCU(k) = CCU₀ × (1 + G·e^-(k-1)/1.2) × e^-λk — monte puis redescend,
+   comme la vie réelle d'un jeu Roblox.
+   ================================================================ */
+function sixMonthOutlook(g, invIn) {
+  const inv = invIn || investAnalysis(g);
+  const themes = inv.themes.map(t => t.label);
+  const note = g.up + g.down > 0 ? g.up / (g.up + g.down) * 100 : 50;
+  const conv = g.visits > 0 ? g.favorites / g.visits * 100 : 0;
+  const age = ageDays(g);
+  const md = measuredDaily(g);
+  /* --- longévité L --- */
+  let L = 0.5;
+  if (themes.some(x => /Social|Échange|Pets|Fishing|RP/i.test(x))) L += 0.15;
+  if (themes.some(x => /Tycoon|Simulator|Anime|Fashion/i.test(x))) L += 0.05;
+  if (themes.some(x => /hype courte/.test(x))) L -= 0.20;
+  if (themes.some(x => /Brainrot|Steal-a-X/.test(x))) L -= 0.10;
+  if (md.daily > 0.03) L += 0.05; else if (md.daily < -0.05) L -= 0.10;
+  if (note >= 90) L += 0.10; else if (note < 80) L -= 0.05;
+  if (age > 60) L += 0.10; else if (age < 7) L -= 0.10;
+  /* signal crucial de longévité : le dev met-il à jour son jeu ? (les jeux abandonnés meurent) */
+  const dUp = (Date.now() - new Date(g.updated)) / 864e5;
+  if (dUp <= 7) L += 0.08; else if (dUp > 60) L -= 0.15;
+  L = Math.max(0.10, Math.min(0.95, L));
+  /* λ peut devenir légèrement NÉGATIF pour les jeux très durables → stabilité voire
+     croissance organique (profil evergreen type social/échange avec dev actif) */
+  const lam = Math.max(-0.04, 0.8 * (0.72 - L));
+  /* --- élan de croissance G (multiplicateur du 1er mois) --- */
+  let G = Math.max(-0.6, Math.min(1.5, md.daily * 20)); // élan mesuré, converti prudemment
+  if (themes.some(x => /Brainrot|Steal-a-X|Escape/.test(x)) && age < 30) G += 0.30; // méta virale + jeune = l'algo pousse
+  if (note >= 90 && conv > 0.5) G += 0.20;                                          // engagement qui convertit
+  if (age < 14 && md.conf < 0.3) G += 0.10;                                         // très jeune : potentiel de découverte
+  G = Math.max(-0.6, Math.min(2.0, G));
+  /* --- trajectoire mensuelle (revenus nets, taux calibré selon le genre) --- */
+  const r = monetRate(g);
+  const ccu0 = g.playing;
+  const ccuM = [ccu0], revLoM = [], revHiM = [];
+  for (let k = 1; k <= 6; k++) {
+    const m = (1 + G * Math.exp(-(k - 1) / 1.2)) * Math.exp(-lam * k);
+    const c = Math.max(0, Math.round(ccu0 * m));
+    ccuM.push(c);
+    revLoM.push(Math.round(c * r.lo * 30));
+    revHiM.push(Math.round(c * r.hi * 30));
+  }
+  const rev6Lo = revLoM.reduce((s,v)=>s+v,0), rev6Hi = revHiM.reduce((s,v)=>s+v,0);
+  return {
+    rev6Lo, rev6Hi, ccuM, revLoM, revHiM, L, G,
+    ccu6: ccuM[6],
+    delta6: ccu0 > 0 ? (ccuM[6] - ccu0) / ccu0 * 100 : 0,
+    retention: ccu0 > 0 ? ccuM[6] / ccu0 : 0,
+    peakMonth: ccuM.indexOf(Math.max(...ccuM)),
+  };
+}
+
+/* 💰 Combien offrir pour 10–20% de parts, rentable sur ~6 mois :
+   seuil de rentabilité = part × revenus projetés 6 mois ;
+   offre conseillée = 50% de ce seuil (remboursée en ~3 mois,
+   marge pour le déclin, la part de Roblox et le risque d'arnaque). */
+function offerEst(g, invIn) {
+  const o = sixMonthOutlook(g, invIn);
+  const mid = (o.rev6Lo + o.rev6Hi) / 2;
+  return {
+    o,
+    recLo: Math.round(0.10 * o.rev6Lo * 0.5),  // offre conseillée pour 10%
+    recHi: Math.round(0.20 * o.rev6Hi * 0.5),  // offre conseillée pour 20%
+    be10: Math.round(0.10 * mid),              // seuil de rentabilité 6 mois à 10%
+    be20: Math.round(0.20 * mid),              // idem à 20%
+  };
+}
+
+/* ================================================================
+   🌱 ANALYSE LONG TERME : cherche les profils "evergreen" — les jeux
+   qui peuvent rester stables ou monter pendant des années, même niches.
+   Basé sur les facteurs de longévité identifiés sur le marché :
+   hooks sociaux, économie d'échange, dev qui met à jour régulièrement,
+   note excellente, survie déjà prouvée, méta durable. Un petit jeu
+   niche avec un dev acharné et 95% de notes vaut mieux à long terme
+   qu'un gros jeu hype abandonné.
+   ================================================================ */
+function longTermAnalysis(g, invIn) {
+  const inv = invIn || investAnalysis(g);
+  const o6 = sixMonthOutlook(g, inv);
+  const note = g.up + g.down > 0 ? g.up / (g.up + g.down) * 100 : 50;
+  const conv = g.visits > 0 ? g.favorites / g.visits * 100 : 0;
+  const t72 = trendPct(g, 72);
+  const dUp = (Date.now() - new Date(g.updated)) / 864e5;
+  const age = ageDays(g);
+  const themes = inv.themes.map(t => t.label);
+  const evergreen = themes.filter(x => /Social|Échange|Pets|Fishing|RP|Obby|Simulator|Tycoon|Sport|Fashion/i.test(x));
+  const reasons = [], risks = [];
+  let s = o6.L * 45;                                            // la longévité du modèle (45 pts max)
+  s += Math.min(20, note * 0.2);                                // qualité des notes (20)
+  s += Math.min(12, conv * 12);                                 // conversion en favoris (12)
+  s += dUp <= 7 ? 15 : dUp <= 21 ? 10 : dUp <= 45 ? 5 : 0;      // dev actif (15)
+  if (t72 != null && t72 >= -5) s += 5;                         // stabilité ou croissance actuelle
+  if (age > 90) s += 5;                                         // survivant confirmé
+  s = Math.round(Math.min(100, s));
+  if (evergreen.length) reasons.push("méta durable (" + evergreen.slice(0, 2).join(", ") + ")");
+  if (dUp <= 14) reasons.push("dev actif — maj il y a " + Math.max(1, Math.round(dUp)) + " j");
+  if (age > 90) reasons.push("a déjà survécu " + Math.round(age) + " j : la sélection naturelle est passée");
+  if (conv > 0.5) reasons.push("les visiteurs s'attachent (" + conv.toFixed(1) + "% de mise en favori)");
+  if (note >= 90) reasons.push("note excellente (" + Math.round(note) + "%)");
+  if (o6.delta6 >= 0) reasons.push("trajectoire 6 mois stable/positive");
+  if (dUp > 45) risks.push("pas de maj depuis " + Math.round(dUp) + " j — risque d'abandon, le tueur n°1 des jeux");
+  if (themes.some(x => /hype courte|Brainrot|Steal-a-X/.test(x))) risks.push("méta à cycle court : le long terme n'est pas son terrain");
+  if (t72 != null && t72 < -15) risks.push("en baisse en ce moment (" + t72.toFixed(0) + "%)");
+  if (g.playing < 30) risks.push("très petite base : fragile même si le profil est bon");
+  return { score: s, o6, reasons, risks, dUp };
+}
+function scoutParts(g) {
+  const t = trendPct(g);
+  return {
+    momentum: t == null ? 50 : Math.max(0, Math.min(100, 50 + t * 1.5)),
+    notes: g.up + g.down > 0 ? Math.round(g.up / (g.up + g.down) * 100) : 50,
+    conversion: Math.min(100, g.visits > 0 ? (g.favorites / g.visits) * 4000 : 0),
+    fraicheur: Math.max(0, Math.min(100, 100 - ageDays(g) / 1.8)),
+    traction: Math.min(100, Math.log10(Math.max(1, g.playing)) / 5 * 100),
+  };
+}
+function potential(g) {
+  const p = scoutParts(g);
+  return Math.round(p.momentum*.30 + p.notes*.25 + p.conversion*.20 + p.fraicheur*.15 + p.traction*.10);
+}
+
+/* ================================================================
+   🧠 MOTEUR D'ANALYSE D'INVESTISSEMENT
+   Basé sur l'analyse du marché Roblox 2026 : deux voies gagnantes —
+   (a) coller à une méta virale (brainrot, steal-a-X, grow/idle,
+       survie co-op, horreur, anime fighters, fashion social…)
+   (b) être original avec un engagement anormalement fort.
+   Facteurs de longévité : hooks sociaux, économie d'échange,
+   updates fréquentes, PvP, accessibilité mobile immédiate.
+   ================================================================ */
+const META_THEMES = [
+  { rx: /steal\s+(a|the)\b/i,                                   label: "Steal-a-X",            w: 22 },
+  { rx: /brainrot|tralalero|sahur|bombardino|crocodilo|tung/i,  label: "Brainrot",             w: 20 },
+  { rx: /grow\s+a\b|garden|plant/i,                             label: "Grow / idle-farm",     w: 16 },
+  { rx: /\bfish|fishing/i,                                      label: "Fishing",              w: 13 },
+  { rx: /night|forest|surviv/i,                                 label: "Survie co-op",         w: 13 },
+  { rx: /horror|scary|haunt|mimic|forsaken|doors/i,             label: "Horreur",              w: 12 },
+  { rx: /anime|jujutsu|bleach|shindo|battleground|cursed/i,     label: "Anime fighter",        w: 12 },
+  { rx: /dress|fashion|makeover|impress/i,                      label: "Fashion social",       w: 11 },
+  { rx: /\brp\b|roleplay|hangout|life\b|town/i,                 label: "Social / RP",          w: 10 },
+  { rx: /\bpets?\b|adopt/i,                                     label: "Pets / collection",    w: 10 },
+  { rx: /tycoon/i,                                              label: "Tycoon",               w: 10 },
+  { rx: /trade|trading|market/i,                                label: "Économie d'échange",   w: 9 },
+  { rx: /escape|tsunami|run\b|runner/i,                         label: "Escape / course",      w: 8 },
+  { rx: /simulator/i,                                           label: "Simulator",            w: 8 },
+  { rx: /rivals|\bfps\b|shooter|gun\b|aim/i,                    label: "FPS mobile",           w: 8 },
+  { rx: /volleyball|basketball|soccer|football|boxing|tennis/i, label: "Sport hybride",        w: 8 },
+  { rx: /obby|tower|parkour|climb/i,                            label: "Obby / skill",         w: 6 },
+  { rx: /idle|clicker|tap\b/i,                                  label: "Idle / clicker",       w: 6 },
+  { rx: /lucky\s*block|\brng\b|admin/i,                         label: "RNG / admin (hype courte)", w: 5 },
+];
+function detectThemes(g) {
+  const txt = g.name + " " + (g.desc || "").slice(0, 300);
+  return META_THEMES.filter(t => t.rx.test(txt));
+}
+/* fréquence des mots dans les titres du dataset : sert à repérer les concepts originaux */
+let nameFreq = {};
+const tokenize = s => ((s || "").toLowerCase().match(/[a-zà-ÿ]{4,}/g) || []);
+function rebuildNameFreq() {
+  nameFreq = {};
+  games.forEach(g => tokenize(g.name).forEach(w => nameFreq[w] = (nameFreq[w] || 0) + 1));
+}
+function investAnalysis(g) {
+  const t24 = trendPct(g), t72 = trendPct(g, 72);
+  const age = ageDays(g);
+  const note = g.up + g.down > 0 ? g.up / (g.up + g.down) * 100 : 50;
+  const conv = g.visits > 0 ? g.favorites / g.visits * 100 : 0;
+  const themes = detectThemes(g);
+  const themeScore = Math.min(30, themes.reduce((s, t) => s + t.w, 0));
+  const toks = tokenize(g.name);
+  const rare = toks.length ? toks.filter(x => (nameFreq[x] || 0) <= 2).length / toks.length : 0;
+  const unique = themeScore < 8 && rare > .5 && (conv > .4 || note >= 90);
+  /* composantes sur 100 */
+  const growth = t72 == null ? 45 : Math.max(0, Math.min(100, 50 + t72));
+  const engagement = Math.min(100, note * .5 + Math.min(50, conv * 40));
+  const meta = themeScore / 30 * 100;
+  const original = unique ? 100 : Math.min(100, rare * 60);
+  const timing = age < 3 ? 70 : age <= 45 ? 100 - (age - 3) / 42 * 30 : Math.max(0, 70 - (age - 45));
+  const deal = Math.min(100, (g.playing >= 20 && g.playing <= 3000 ? 70 : g.playing < 20 ? 30 : 40)
+             + (g.creator?.type === "Group" ? 15 : 0) + (g.discord?.has ? 15 : 0));
+  let score = growth*.25 + engagement*.20 + meta*.20 + original*.10 + timing*.15 + deal*.10;
+  const risks = [];
+  if (note < 70) { score -= 10; risks.push("note faible (" + Math.round(note) + "%)"); }
+  if (t24 != null && t24 < -15) { score -= 10; risks.push("en baisse sur 24h (" + t24.toFixed(0) + "%)"); }
+  if (g.playing < 5) { score -= 15; risks.push("quasi mort (< 5 joueurs)"); }
+  if (themes.some(t => /hype courte/.test(t.label))) risks.push("méta à churn rapide : la hype retombe vite");
+  if (g.creator?.type !== "Group") risks.push("créateur solo : pas de groupe → parts difficiles à structurer");
+  score = Math.round(Math.max(0, Math.min(100, score)));
+  return { score, parts: { growth, engagement, meta, original, timing, deal }, themes, risks, unique };
+}
+
+/* ---------- chargement principal ---------- */
+let refreshBusy = false, lastRefresh = 0, dataAge = 0, iconsBusy = false;
+const DATA_URL = "../data/"; // le site est dans /site, les données dans /data
+async function refreshAll(manual) {
+  if (refreshBusy && !manual) return;
+  refreshBusy = true;
+  setStatus("Chargement des données du collecteur…");
+  try {
+    const r = await fetch(DATA_URL + "top.json?t=" + Date.now());
+    if (!r.ok) throw new Error("top.json introuvable (HTTP " + r.status + ") — le collecteur a-t-il déjà tourné ? (Actions → Run workflow)");
+    const d = await r.json();
+    games = d.games.map(a => ({
+      universeId: a[0], placeId: a[1], name: a[2], creator: a[3],
+      playing: a[4], visits: a[5], favorites: a[6], created: a[7], updated: a[8],
+      up: a[9], down: a[10], genre: a[11] || "", maxPlayers: a[12], chart: a[13],
+      discord: a[14] ? { has: !!a[14].d, url: a[14].d, group: { name: a[3] ? a[3].name : "?", members: a[14].m } } : null,
+      desc: "", icon: iconCache[a[0]] || "",
+      sT24: a[15], sT72: a[16], sV72: a[17], sF72: a[18], sSession: a[19], sAvgCcu: a[20], sHistH: a[21], spark: a[22] || [],
+    }));
+    dataAge = Date.now() - d.t;
+    loadIcons(); // icônes via les proxys côté client, avec cache
+    rebuildNameFreq();
+    document.getElementById("helpbox").classList.remove("show");
+    document.getElementById("lastUpdate").textContent = "🌌 " + games.length + " jeux du collecteur · données collectées il y a " + Math.round(dataAge/60000) + " min";
+    lastRefresh = Date.now();
+    render();
+  } catch(e) {
+    console.error(e);
+    document.getElementById("helpbox").classList.add("show");
+    setStatus("Échec : " + (e.message || e), true);
+  } finally { refreshBusy = false; lastRefresh = lastRefresh || Date.now(); }
+}
+async function loadIcons() {
+  if (iconsBusy) return; iconsBusy = true;
+  try {
+    const missing = games.filter(g => !iconCache[g.universeId]).map(g => g.universeId).slice(0, 360);
+    for (let i = 0; i < missing.length; i += 60) {
+      const c = missing.slice(i, i + 60);
+      try {
+        const j = await robloxGet("thumbnails", `/v1/games/icons?universeIds=${c.join(",")}&returnPolicy=PlaceHolder&size=128x128&format=Png&isCircular=false`);
+        (j.data || []).forEach(x => iconCache[x.targetId] = x.imageUrl);
+      } catch(e) { break; }
+      games.forEach(g => { if (!g.icon) g.icon = iconCache[g.universeId] || ""; });
+      render();
+    }
+  } finally { iconsBusy = false; }
+}
+/* historique détaillé : chargé à la demande depuis les shards du collecteur */
+const shardCache = {};
+async function loadHist(uid) {
+  const s = Number(uid) % 16;
+  if (!shardCache[s]) {
+    try { shardCache[s] = await (await fetch(DATA_URL + "hist-" + s + ".json?t=" + Date.now())).json(); }
+    catch(e) { shardCache[s] = {}; }
+  }
+  const H = shardCache[s][uid];
+  if (!H) return;
+  const daily = (H.d || []).slice(0, -1).map(p => ({ t: new Date(p[0]).getTime(), ccu: p[1], visits: p[3], favs: p[4], up: 0, down: 0 }));
+  const recent = (H.r || []).map(p => ({ t: p[0], ccu: p[1], visits: p[2], favs: p[3], up: p[4], down: p[5] }));
+  const cut = recent.length ? recent[0].t : Infinity;
+  history[uid] = [...daily.filter(p => p.t < cut), ...recent];
+}
+/* ---------- 🧭 Radar nouveautés : crawle les recommandations Roblox en chaîne
+   depuis les jeux les plus jeunes pour dénicher des jeux qui viennent tout juste
+   de sortir (hors classements), et les accumule dans un vivier persistant ---------- */
+let spiderBusy = false;
+async function spiderYoung() {
+  if (spiderBusy) return; spiderBusy = true;
+  try {
+    const known = new Set(games.map(g => g.universeId));
+    let seeds = games.filter(g => ageDays(g) < 45).sort((a,b) => ageDays(a) - ageDays(b)).slice(0, 25);
+    for (let hop = 0; hop < 2 && seeds.length; hop++) {
+      const newIds = new Set();
+      await pMap(seeds, async g => {
+        const j = await robloxGet("games", `/v1/games/recommendations/game/${g.universeId}?maxRows=12`);
+        (j.games || j.data || []).forEach(r => { const uid = r.universeId || r.id; if (uid && !known.has(uid)) newIds.add(uid); });
+      }, 5);
+      const ids = [...newIds].slice(0, 160);
+      if (!ids.length) break;
+      const chunks = []; for (let i = 0; i < ids.length; i += 40) chunks.push(ids.slice(i, i + 40));
+      const gdParts = await pMap(chunks, c => robloxGet("games", `/v1/games?universeIds=${c.join(",")}`), 5);
+      /* on ne garde que les jeux de moins de 60 jours : c'est un radar à nouveautés */
+      const youngData = gdParts.flatMap(p => p?.data || []).filter(d => (Date.now() - new Date(d.created)) / 86400000 < 60);
+      if (!youngData.length) break;
+      const yIds = youngData.map(d => d.id);
+      const yChunks = []; for (let i = 0; i < yIds.length; i += 40) yChunks.push(yIds.slice(i, i + 40));
+      const [vdParts, idParts] = await Promise.all([
+        pMap(yChunks, c => robloxGet("games", `/v1/games/votes?universeIds=${c.join(",")}`), 5),
+        pMap(yChunks, c => robloxGet("thumbnails", `/v1/games/icons?universeIds=${c.join(",")}&returnPolicy=PlaceHolder&size=128x128&format=Png&isCircular=false`), 5),
+      ]);
+      const votes = {}; vdParts.flatMap(p => p?.data || []).forEach(v => votes[v.id] = v);
+      idParts.flatMap(p => p?.data || []).forEach(i => iconCache[i.targetId] = i.imageUrl);
+      const icons = iconCache;
+      const t = Date.now();
+      const added = youngData.map(g => ({
+        universeId: g.id, placeId: g.rootPlaceId, name: g.sourceName || g.name, desc: g.description || "",
+        creator: g.creator, playing: g.playing || 0, visits: g.visits || 0,
+        favorites: g.favoritedCount || 0, created: g.created, updated: g.updated,
+        maxPlayers: g.maxPlayers || null, genre: g.genre || "",
+        up: votes[g.id]?.upVotes || 0, down: votes[g.id]?.downVotes || 0,
+        icon: icons[g.id] || "", chart: "🧭 Radar nouveautés", discord: null,
+      }));
+      added.forEach(g => {
+        known.add(g.universeId);
+        g.lastSeen = t;
+        gameStore[g.universeId] = g;
+        if (!youngPool.includes(g.universeId)) youngPool.push(g.universeId);
+        history[g.universeId] = history[g.universeId] || [];
+        const h = history[g.universeId];
+        if (!h.length || t - h[h.length-1].t > 55000) {
+          h.push({ t, ccu: g.playing, visits: g.visits, favs: g.favorites, up: g.up, down: g.down });
+          if (h.length > 200) h.shift();
+        }
+      });
+      games = Object.values(gameStore);
+      /* saut suivant : on repart des plus jeunes trouvailles */
+      seeds = added.sort((a,b) => ageDays(a) - ageDays(b)).slice(0, 15);
+    }
+    /* élagage du vivier : on garde les jeux < 60 jours, max 600 */
+    const byUid = new Map(games.map(g => [g.universeId, g]));
+    youngPool = youngPool.filter(uid => { const g = byUid.get(uid); return !g || ageDays(g) < 60; }).slice(-600);
+    saveStore();
+    rebuildNameFreq();
+    render();
+  } catch(e) { console.warn("radar nouveautés:", e); }
+  finally { spiderBusy = false; }
+}
+
+/* Discord paresseux : on ne résout que les jeux actuellement affichés, par lots de 8 */
+let discordBusy = false;
+async function ensureDiscord(ids) {
+  if (discordBusy) return;
+  const byId = new Map(games.map(g => [g.universeId, g]));
+  const todo = ids.map(id => byId.get(id)).filter(g => g && g.creator?.type === "Group" && g.discord == null).slice(0, 64);
+  if (!todo.length) return;
+  discordBusy = true;
+  try {
+    for (let i = 0; i < todo.length; i += 8) {
+      await Promise.allSettled(todo.slice(i, i + 8).map(async g => { g.discord = await fetchDiscord(g.creator.id); }));
+    }
+  } finally { discordBusy = false; }
+  render();
+  if (openId) openModal(openId);
+}
+
+/* ---------- watchlist & ajout ---------- */
+function toggleWatch(ev, placeId) {
+  ev.stopPropagation();
+  const i = watchlist.indexOf(placeId);
+  if (i >= 0) watchlist.splice(i, 1); else watchlist.push(placeId);
+  saveStore(); render();
+}
+function addGame() {
+  const v = document.getElementById("addInput").value.trim();
+  const m = v.match(/games\/(\d+)/) || v.match(/^(\d+)$/);
+  if (!m) { setStatus("Colle un lien roblox.com/games/… ou un ID numérique.", true); return; }
+  const pid = parseInt(m[1]);
+  if (!watchlist.includes(pid)) { watchlist.push(pid); saveStore(); }
+  setStatus("⭐ Ajouté à ta watchlist locale. Pour que le collecteur le suive 24h/24 : sur GitHub, ouvre tracked.json → ✏️ → ajoute " + pid + " dans placeIds → Commit.", false);
+  document.getElementById("addInput").value = "";
+  render();
+}
+
+/* ---------- onglets & tri ---------- */
+function setTab(t) {
+  currentTab = t; sortKey = null;
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === t));
+  document.getElementById("scoutBar").classList.toggle("show", t === "scout");
+  render();
+}
+function setSort(k) {
+  if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = -1; }
+  render();
+}
+
+/* ---------- mini-graphique (sparkline SVG, historique réel) ---------- */
+function sparkline(g) {
+  const vals = (g.spark || []).slice(-30);
+  if (vals.length < 3) return '<span class="flat" style="font-size:11px">—</span>';
+  const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1;
+  const W = 90, H = 26;
+  const pts = vals.map((v, i) => `${(i/(vals.length-1)*W).toFixed(1)},${(H - 3 - (v-min)/range*(H-6)).toFixed(1)}`).join(" ");
+  const upT = vals[vals.length-1] >= vals[0];
+  return `<svg class="spark" width="${W}" height="${H}"><polyline points="${pts}" fill="none" stroke="${upT ? "var(--green)" : "var(--red)"}" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+}
+
+/* ---------- rendu du tableau ---------- */
+function render() {
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  let list = games.map(g => ({ ...g, _t24: trendPct(g), _pot: potential(g), _age: ageDays(g), _w: windowStats(g), _inv: null, _lt: null }));
+  if (q) list = list.filter(g => g.name.toLowerCase().includes(q) || (g.creator?.name||"").toLowerCase().includes(q));
+
+  const maxAge = +document.getElementById("ageRange").value;
+  const minCcu = +document.getElementById("ccuRange").value;
+  const maxCcuRaw = +document.getElementById("ccuMaxRange").value;
+  const maxCcu = maxCcuRaw >= 5000 ? Infinity : maxCcuRaw;
+
+  if (currentTab === "scout") {
+    list = list.filter(g => g._age <= maxAge && g.playing >= minCcu && g.playing <= maxCcu);
+    /* du plus récent au plus ancien ; à âge égal, le meilleur potentiel d'abord */
+    list.sort((a,b) => a._age - b._age || b._pot - a._pot);
+  } else if (currentTab === "picks") {
+    /* 🏅 univers investissable : jeux de groupes (les parts s'achètent via le groupe),
+       récents, vivants et corrects — classés par score d'investissement */
+    list = list.filter(g => g.creator?.type === "Group" && g._age <= 120 && g.playing >= 10
+      && (g.up + g.down === 0 || g.up / (g.up + g.down) >= .70));
+    list.forEach(g => g._inv = investAnalysis(g));
+    list.sort((a,b) => b._inv.score - a._inv.score);
+    list = list.slice(0, 30);
+  } else if (currentTab === "lt") {
+    /* 🌱 profils evergreen : jeux de groupes vivants, très bien notés, encore maintenus —
+       sans limite d'âge ni de taille (les niches sont bienvenues), trajectoire non déclinante */
+    list = list.filter(g => g.creator?.type === "Group" && g.playing >= 15
+      && ((Date.now() - new Date(g.updated)) / 864e5) <= 60
+      && (g.up + g.down === 0 || g.up / (g.up + g.down) >= .80));
+    list.forEach(g => { g._inv = investAnalysis(g); g._lt = longTermAnalysis(g, g._inv); });
+    list = list.filter(g => g._lt.o6.delta6 >= -25);
+    list.sort((a,b) => b._lt.score - a._lt.score);
+    list = list.slice(0, 40);
+  } else if (currentTab === "trend") {
+    list.sort((a,b) => (b._t24 ?? -1e9) - (a._t24 ?? -1e9));
+  } else if (currentTab === "top") {
+    list.sort((a,b) => b.playing - a.playing);
+  } else if (currentTab === "watch") {
+    list = list.filter(g => watchlist.includes(g.placeId));
+    list.sort((a,b) => b._pot - a._pot);
+  }
+  if (sortKey) {
+    const get = { name: g=>g.name.toLowerCase(), playing: g=>g.playing, visits: g=>g.visits, favorites: g=>g.favorites,
+      note: g=>g.up/(g.up+g.down||1), t24: g=>g._t24 ?? -1e9, pot: g=>g._pot, age: g=>g._age,
+      vday: g=>g.visits / Math.max(1, g._age), inv: g=>g._inv?.score ?? -1, lt: g=>g._lt?.score ?? -1, offer: g=>g._inv ? offerEst(g, g._inv).recHi : -1, ccu6: g=>g._inv ? sixMonthOutlook(g, g._inv).ccu6 : -1,
+      v72: g=>g._w?.visits72 ?? -1, session: g=>g._w?.sessionMin ?? -1, rev: g=>g.playing }[sortKey];
+    list.sort((a,b) => (get(a) > get(b) ? 1 : -1) * sortDir * -1);
+  }
+
+  const isScout = currentTab === "scout";
+  const isPicks = currentTab === "picks";
+  const isLT = currentTab === "lt";
+  const th = (label, key, left) => `<th class="${left?"l ":""}${sortKey===key?"sorted":""}" onclick="setSort('${key}')">${label}${sortKey===key ? (sortDir<0?" ↓":" ↑") : ""}</th>`;
+
+  if (!list.length) {
+    document.getElementById("tableWrap").innerHTML = `<div class="empty">${
+      games.length === 0 ? "Chargement…" :
+      currentTab === "watch" ? "Ta watchlist est vide.<br>Clique sur l'étoile ☆ d'un jeu (par ex. depuis l'onglet Scouting) pour le garder à l'œil même quand il sort des charts." :
+      currentTab === "picks" ? "Pas encore de candidats — le score d'investissement a besoin d'un peu d'historique (laisse tourner quelques cycles) et l'onglet ne montre que les jeux de groupes récents et vivants." :
+      currentTab === "lt" ? "Pas encore de profils evergreen détectés — cet onglet exige des jeux de groupes très bien notés (≥80%), encore mis à jour (< 60 j) et à trajectoire stable. Laisse l'app accumuler de l'historique." :
+      "Aucun jeu ne correspond aux filtres actuels — élargis l'âge ou baisse le minimum de joueurs."
+    }</div>`;
+    return;
+  }
+
+  document.getElementById("tableWrap").innerHTML = `
+  <table style="${detailedView ? "" : "min-width:860px"}">
+    <thead><tr>
+      <th class="l">#</th>
+      ${th("Jeu", "name", true)}
+      ${th("Sorti il y a", "age")}
+      ${th("🔴 Joueurs", "playing")}
+      ${th("Évolution 24h", "t24")}
+      ${detailedView ? th("Visites", "visits") : ""}
+      ${detailedView ? th("Visites/j", "vday") : ""}
+      ${detailedView ? th("+Visites 72h", "v72") : ""}
+      ${detailedView ? th("Session moy.*", "session") : ""}
+      ${th("Rev/jour est.*", "rev")}
+      ${detailedView ? th("Favoris", "favorites") : ""}
+      ${th("Note", "note")}
+      ${detailedView ? "<th>Historique</th>" : ""}
+      ${isPicks ? th("🏅 Invest", "inv") : isLT ? th("🌱 Long terme", "lt") : th("Potentiel", "pot")}
+      ${(isPicks || isLT) ? th("Joueurs M+6*", "ccu6") : ""}
+      ${(isPicks || isLT) ? th("💰 Offre 10–20%*", "offer") : ""}
+      ${isScout ? '<th class="l">Pourquoi lui ?</th>' : ""}
+      ${(isPicks || isLT) ? '<th class="l">🧠 Analyse</th>' : ""}
+      <th>⭐</th>
+    </tr></thead>
+    <tbody>
+    ${list.map((g, i) => {
+      const ratio = g.up+g.down>0 ? Math.round(g.up/(g.up+g.down)*100) : 0;
+      const t = g._t24;
+      const tHtml = t == null ? '<span class="flat">—</span>' : `<span class="delta ${t>=1?"up":t<=-1?"down":"flat"}">${t>=0?"+":""}${t.toFixed(1)}%</span>`;
+      const potCls = g._pot >= 65 ? "hi" : g._pot >= 45 ? "mid" : "lo";
+      const conv = g.visits > 0 ? (g.favorites/g.visits*100) : 0;
+      const why = isScout ? `<td class="why">sorti il y a <b>${Math.max(1,Math.round(g._age))} j</b>${t!=null?` · <b>${t>=0?"+":""}${t.toFixed(0)}%</b> en 24h`:""} · note <b>${ratio}%</b> · <b>${conv.toFixed(1)}%</b> des visiteurs mettent en favori${g.discord?.has?' · <b>Discord ✔</b>':''}</td>` : "";
+      const inv = g._inv;
+      const lt = g._lt;
+      const analyse = isPicks && inv ? `<td class="why" style="max-width:290px">${
+        inv.themes.length ? "📈 " + inv.themes.slice(0,3).map(x=>"<b>"+x.label+"</b>").join(", ") + " · " : ""
+      }${inv.unique ? "💡 <b>concept original qui accroche</b> · " : ""}${
+        inv.risks.length ? '<span style="color:var(--red)">⚠ ' + inv.risks.join(" · ") + '</span>' : '<span style="color:var(--green)">aucun signal négatif détecté</span>'
+      }</td>` : isLT && lt ? `<td class="why" style="max-width:310px">${
+        lt.reasons.length ? "🌱 " + lt.reasons.map(x=>"<b>"+x+"</b>").join(" · ") : ""
+      }${lt.reasons.length && lt.risks.length ? "<br>" : ""}${
+        lt.risks.length ? '<span style="color:var(--red)">⚠ ' + lt.risks.join(" · ") + '</span>' : ''
+      }</td>` : "";
+      const scoreCell = isPicks && inv
+        ? `<td class="mono pot ${inv.score >= 65 ? "hi" : inv.score >= 45 ? "mid" : "lo"}">${inv.score}%</td>`
+        : isLT && lt
+        ? `<td class="mono pot ${lt.score >= 65 ? "hi" : lt.score >= 45 ? "mid" : "lo"}">${lt.score}%</td>`
+        : `<td class="mono pot ${potCls}">${g._pot}%</td>`;
+      const offerCell = (isPicks || isLT) && inv
+        ? (() => { const o6 = isLT && lt ? lt.o6 : sixMonthOutlook(g, inv); const of = offerEst(g, inv); return `<td class="mono" style="color:${o6.delta6>=0?"var(--green)":"var(--red)"}">${fmt(o6.ccu6)} <span style="font-size:10px">(${o6.delta6>=0?"+":""}${o6.delta6.toFixed(0)}%)</span></td><td class="mono" style="font-size:12px">${of.recLo > 0 ? fmtRange(of.recLo, of.recHi) : '<span class="flat">—</span>'}</td>`; })()
+        : "";
+      return `<tr class="g" onclick="openModal(${g.universeId})">
+        <td class="l rank mono">${i+1}</td>
+        <td class="l"><div class="gcell">
+          <img src="${g.icon}" loading="lazy" alt="">
+          <div><div class="gname">${esc(g.name)}</div>
+            <div class="gby">${esc(g.creator?.name||"?")}${g.creator?.type==="Group"?" (groupe)":""}</div>
+            <div class="chips">
+              ${g._age < 75 && g.playing > 0 && g.playing < 800 && (g.up/(g.up+g.down||1)) >= .85 ? '<span class="chip gem">💎 Pépite</span>' : ""}
+              ${g.chart ? `<span class="chip chart">📈 ${esc(g.chart)}</span>` : ""}
+              ${g.discord?.has ? '<span class="chip discord">Discord</span>' : ""}
+              ${g._age < 90 ? '<span class="chip new">Nouveau</span>' : ""}
+            </div>
+          </div>
+        </div></td>
+        <td class="mono">${Math.max(1,Math.round(g._age))} j</td>
+        <td class="mono">${fmt(g.playing)}</td>
+        <td>${tHtml}</td>
+        ${detailedView ? `<td class="mono">${fmt(g.visits)}</td>` : ""}
+        ${detailedView ? `<td class="mono">${fmt(Math.round(g.visits / Math.max(1, g._age)))}</td>` : ""}
+        ${detailedView ? `<td class="mono">${g._w ? "+" + fmt(g._w.visits72) + (g._w.partial ? "†" : "") : '<span class="flat">—</span>'}</td>` : ""}
+        ${detailedView ? `<td class="mono">${g._w?.sessionMin != null ? fmtMin(g._w.sessionMin) : '<span class="flat">—</span>'}</td>` : ""}
+        <td class="mono" style="font-size:12px">${g.playing > 0 ? fmtRange(revEst(g).dayLo, revEst(g).dayHi) : '<span class="flat">—</span>'}</td>
+        ${detailedView ? `<td class="mono">${fmt(g.favorites)}</td>` : ""}
+        <td class="mono" style="color:${ratio>=85?"var(--green)":ratio>=70?"var(--gold)":"var(--red)"}">${ratio}%</td>
+        ${detailedView ? `<td>${sparkline(g)}</td>` : ""}
+        ${scoreCell}
+        ${offerCell}
+        ${why}
+        ${analyse}
+        <td><button class="star ${watchlist.includes(g.placeId)?"on":""}" onclick="toggleWatch(event, ${g.placeId})">${watchlist.includes(g.placeId)?"⭐":"☆"}</button></td>
+      </tr>`;
+    }).join("")}
+    </tbody>
+  </table>`;
+
+  setStatus(list.length + " jeux affichés · 🌌 univers cumulé : " + games.length + " jeux (grossit à chaque cycle, re-scannés en rotation) · 🧭 vivier radar : " + youngPool.length + " · * estimations · † historique < 72h, extrapolé");
+  ensureDiscord(list.map(g => g.universeId));
+}
+
+/* ---------- fiche jeu (dashboard) ---------- */
+function openModal(uid) {
+  const g = games.find(x => x.universeId === uid); if (!g) return;
+  openId = uid;
+  const ratio = g.up+g.down>0 ? Math.round(g.up/(g.up+g.down)*100) : 0;
+  const t = trendPct(g);
+  const w = windowStats(g);
+  const rev = revEst(g);
+  const inv = investAnalysis(g);
+  const out6 = sixMonthOutlook(g, inv);
+  const of = offerEst(g, inv);
+  const parts = scoutParts(g);
+  const creatorLink = g.creator?.type === "Group"
+    ? `https://www.roblox.com/groups/${g.creator.id}` : `https://www.roblox.com/users/${g.creator?.id}/profile`;
+
+  document.getElementById("modal").innerHTML = `
+    <div class="modal-head">
+      <img src="${g.icon}" alt="">
+      <div>
+        <h2>${esc(g.name)}</h2>
+        <div class="by">Par <a href="${creatorLink}" target="_blank">${esc(g.creator?.name||"?")}</a> ${g.creator?.type==="Group"?"(groupe)":""} · sorti le ${new Date(g.created).toLocaleDateString("fr-FR")} (il y a ${Math.max(1,Math.round(ageDays(g)))} j) · maj ${new Date(g.updated).toLocaleDateString("fr-FR")}${g.genre && g.genre !== "All" ? " · " + esc(g.genre) : ""}${g.maxPlayers ? " · serveurs de " + g.maxPlayers : ""}</div>
+      </div>
+      <button class="close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="v" style="color:var(--green)">${fmt(g.playing)}</div><div class="l2">Joueurs actifs</div></div>
+      <div class="stat"><div class="v">${fmt(g.visits)}</div><div class="l2">Visites</div></div>
+      <div class="stat"><div class="v">${fmt(g.favorites)}</div><div class="l2">Favoris</div></div>
+      <div class="stat"><div class="v">${ratio}%</div><div class="l2">Note</div></div>
+      <div class="stat"><div class="v" style="color:${t==null?"var(--mut)":t>=0?"var(--green)":"var(--red)"}">${t==null?"—":(t>=0?"+":"")+t.toFixed(1)+"%"}</div><div class="l2">Tendance 24h</div></div>
+      <div class="stat"><div class="v" style="color:var(--accent)">${potential(g)}%</div><div class="l2">Potentiel</div></div>
+    </div>
+
+    <div class="stitle">Activité sur 72h ${w?.partial ? "(historique partiel de " + w.spanH.toFixed(1) + " h, extrapolé)" : ""}</div>
+    <div class="stats" style="margin-top:8px">
+      <div class="stat"><div class="v">${w ? "+" + fmt(w.visits72) : "—"}</div><div class="l2">Visites gagnées</div></div>
+      <div class="stat"><div class="v">${w ? "+" + fmt(w.favs72) : "—"}</div><div class="l2">Favoris gagnés</div></div>
+      <div class="stat"><div class="v">${w ? "+" + fmt(w.likes72) : "—"}</div><div class="l2">👍 gagnés</div></div>
+      <div class="stat"><div class="v">${w ? fmt(Math.round(w.avgCcu)) : "—"}</div><div class="l2">Joueurs moyens</div></div>
+      <div class="stat"><div class="v">${fmtMin(w?.sessionMin)}</div><div class="l2">Session moy. (est.)</div></div>
+      <div class="stat"><div class="v">${fmt(Math.round(g.visits / Math.max(1, ageDays(g))))}</div><div class="l2">Visites/jour (vie du jeu)</div></div>
+    </div>
+
+    <div class="stitle">📅 Trajectoire estimée sur 6 mois — joueurs & revenus mensuels</div>
+    <div class="stats" style="margin-top:8px">
+      <div class="stat"><div class="v" style="color:${out6.delta6>=0?"var(--green)":"var(--red)"}">${fmt(out6.ccu6)}</div><div class="l2">Joueurs estimés dans 6 mois<br>${out6.delta6>=0?"+":""}${out6.delta6.toFixed(0)}% vs aujourd'hui</div></div>
+      <div class="stat"><div class="v">${out6.peakMonth === 0 ? "maintenant" : "M+" + out6.peakMonth}</div><div class="l2">Pic d'activité estimé</div></div>
+      <div class="stat"><div class="v">${Math.round(out6.L*100)}/100</div><div class="l2">Longévité (méta, note, âge)</div></div>
+      <div class="stat"><div class="v" style="color:${out6.G>=0?"var(--green)":"var(--red)"}">${out6.G>=0?"+":""}${Math.round(out6.G*100)}%</div><div class="l2">Élan de croissance initial</div></div>
+    </div>
+    <div class="chart-box"><canvas id="sixChart"></canvas></div>
+    <div style="font-size:11px;color:var(--mut);line-height:1.6;margin:6px 0 2px">
+      Modèle : phase de croissance (élan mesuré + boost méta virale/jeune/engagement) qui s'essouffle, puis déclin selon la longévité de la méta — social/échange/pets durent, brainrot/steal-a-X sont des cycles courts, RNG/admin s'éteignent vite. <b style="color:var(--text)">Lecture investissement</b> : si la courbe monte puis se stabilise haut, la part se rembourse vite ; si elle s'effondre après M+1, seule une entrée très tôt et pas chère est rentable. C'est une estimation, pas une prédiction.
+    </div>
+
+    <div class="stitle">💰 Estimations de revenus (fourchettes non officielles)</div>
+    <div class="stats" style="margin-top:8px">
+      <div class="stat"><div class="v" style="font-size:15px">${fmtRange(rev.dayLo, rev.dayHi)}</div><div class="l2">Par jour<br>${fmtUsd(rev.dayLo, rev.dayHi)}</div></div>
+      <div class="stat"><div class="v" style="font-size:15px">${w ? fmtRev(w) : fmtRange(rev.dayLo*3, rev.dayHi*3)}</div><div class="l2">Sur 72h${w ? " (mesuré)" : ""}<br>${w ? fmtUsd(w.revLo, w.revHi) : fmtUsd(rev.dayLo*3, rev.dayHi*3)}</div></div>
+      <div class="stat"><div class="v" style="font-size:15px">${fmtRange(rev.monthLo, rev.monthHi)}</div><div class="l2">Par mois (si stable)<br>${fmtUsd(rev.monthLo, rev.monthHi)}</div></div>
+      <div class="stat" style="border-color:var(--accent)"><div class="v" style="font-size:15px;color:var(--accent)">${fmtRange(out6.rev6Lo, out6.rev6Hi)}</div><div class="l2">📅 Sur 6 mois (projection pondérée)<br>${fmtUsd(out6.rev6Lo, out6.rev6Hi)} · rétention estimée à 6 mois : ${Math.round(out6.retention*100)}%</div></div>
+    </div>
+
+    <div class="stitle">💼 Combien offrir pour 10–20% de parts ? (rentable sur ~6 mois)</div>
+    <div class="stats" style="margin-top:8px">
+      <div class="stat" style="border-color:var(--green)"><div class="v" style="font-size:15px;color:var(--green)">${fmtRange(of.recLo, of.recLo*2)}</div><div class="l2">Offre conseillée pour 10%<br>${fmtUsd(of.recLo, of.recLo*2)} · remboursée en ±3 mois</div></div>
+      <div class="stat" style="border-color:var(--green)"><div class="v" style="font-size:15px;color:var(--green)">${fmtRange(of.recHi/2, of.recHi)}</div><div class="l2">Offre conseillée pour 20%<br>${fmtUsd(of.recHi/2, of.recHi)} · remboursée en ±3 mois</div></div>
+      <div class="stat"><div class="v" style="font-size:15px;color:var(--gold)">${fmt(of.be10)} R$</div><div class="l2">Plafond absolu à 10%<br>au-delà, tu perds sur 6 mois</div></div>
+      <div class="stat"><div class="v" style="font-size:15px;color:var(--gold)">${fmt(of.be20)} R$</div><div class="l2">Plafond absolu à 20%<br>au-delà, tu perds sur 6 mois</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--mut);line-height:1.6;margin:2px 0 8px">
+      ⚠️ Fiabilité : les données d'activité sont <b style="color:var(--text)">exactes</b>, la session moyenne est une <b style="color:var(--text)">estimation mathématique</b>, et les revenus sont des <b style="color:var(--text)">estimations calibrées sur les benchmarks réels du marché</b> : 3 à 26 R$ <b style="color:var(--text)">nets</b> (après les 30% de Roblox) par joueur simultané et par jour selon le genre — les simulateurs/tycoons/pets monétisent 3-4× mieux que les obbys, et un dev qui met à jour chaque semaine gagne 30-50% de plus qu'un dev inactif (c'est intégré au calcul via la date de dernière maj). La projection 6 mois applique la trajectoire du modèle (longévité : ${Math.round(out6.L*100)}/100 ici). L'offre conseillée = 50% des revenus projetés de la part sur 6 mois, remboursée en ~3 mois avec marge. Contexte à garder en tête : ~85% des créateurs Roblox gagnent moins de 100 $/mois — le marché suit une loi de puissance brutale, d'où l'importance de diversifier tes parts. <b style="color:var(--text)">Avant toute offre : exige les captures du Creator Hub (revenus réels), vérifie que le vendeur possède bien le groupe, et passe par un middleman de confiance.</b> $ = taux DevEx (0,0038 $/R$).
+    </div>
+
+    <div class="vote-wrap">
+      <div class="vote-nums"><span>👍 ${fmt(g.up)}</span><span>👎 ${fmt(g.down)}</span></div>
+      <div class="vote-bar"><div style="width:${ratio}%"></div></div>
+    </div>
+
+    <div class="stitle">🧠 Analyse d'investissement — score : <span style="color:${inv.score>=65?"var(--green)":inv.score>=45?"var(--gold)":"var(--red)"}">${inv.score}%</span></div>
+    ${[["Croissance mesurée (25%)", inv.parts.growth], ["Engagement des joueurs (20%)", inv.parts.engagement], ["Colle à une méta tendance (20%)", inv.parts.meta], ["Originalité du concept (10%)", inv.parts.original], ["Timing de sortie (15%)", inv.parts.timing], ["Facilité du deal (taille, groupe, Discord) (10%)", inv.parts.deal]].map(([lab, v]) => `
+      <div class="score-row"><span class="lab">${lab}</span><div class="bar"><div style="width:${Math.round(v)}%"></div></div><span class="val mono">${Math.round(v)}%</span></div>`).join("")}
+    <div style="font-size:12px;color:var(--mut);line-height:1.7;margin:8px 0 4px">
+      ${inv.themes.length ? "📈 Méta détectée : " + inv.themes.map(x=>"<b style='color:var(--accent)'>"+x.label+"</b>").join(", ") + ".<br>" : ""}
+      ${inv.unique ? "💡 <b style='color:var(--gold)'>Concept original</b> : son titre ne ressemble à rien d'autre dans le dataset et son engagement est anormalement bon — le profil des surprises virales.<br>" : ""}
+      ${inv.risks.length ? "⚠️ <span style='color:var(--red)'>Risques : " + inv.risks.join(" · ") + ".</span><br>" : "✅ <span style='color:var(--green)'>Aucun signal négatif détecté pour l'instant.</span><br>"}
+      L'analyse s'appuie sur les patterns gagnants du marché 2026 : métas virales (brainrot, steal-a-X, grow/idle, survie co-op, horreur, anime, fashion) d'un côté, concepts originaux à fort engagement de l'autre — plus les facteurs de longévité (social, échange, updates, PvP). Elle ne remplace pas ton jugement : joue au jeu, regarde si le créateur update souvent, et vérifie les revenus réels au Creator Hub.
+    </div>
+
+    <div class="stitle">Décomposition du score de potentiel</div>
+    ${[["Momentum 24h (30%)", parts.momentum], ["Qualité des notes (25%)", parts.notes], ["Conversion en favoris (20%)", parts.conversion], ["Fraîcheur de sortie (15%)", parts.fraicheur], ["Traction joueurs (10%)", parts.traction]].map(([lab, v]) => `
+      <div class="score-row"><span class="lab">${lab}</span><div class="bar"><div style="width:${Math.round(v)}%"></div></div><span class="val mono">${Math.round(v)}%</span></div>`).join("")}
+
+    <div class="stitle">Évolution des joueurs actifs + projection 7 jours (estimation)</div>
+    <div class="chart-box"><canvas id="histChart"></canvas></div>
+    <div style="font-size:11px;color:var(--mut);line-height:1.6;margin:6px 0 2px">
+      Trait plein = historique réel enregistré · trait pointillé = <b style="color:var(--text)">projection estimative</b> basée sur la tendance mesurée (elle s'essouffle progressivement) · zone colorée = marge d'incertitude. ${(history[uid]||[]).length >= 2 && ((history[uid][history[uid].length-1].t - history[uid][0].t) / 3600e3) < 6 ? "<b style='color:var(--gold)'>⏳ Moins de 6h d'historique</b> : la projection est volontairement plate car sur une fenêtre si courte, on capte surtout le cycle jour/nuit (les joueurs dorment la nuit !) et pas la vraie tendance. Il faut 24h+ de données pour une projection qui veut dire quelque chose." : (history[uid]||[]).length < 3 ? "<b style='color:var(--text)'>Peu d'historique pour l'instant</b> : la projection part du niveau actuel — laisse la page tourner pour qu'elle devienne pertinente." : "La tendance n'est extrapolée à pleine puissance qu'à partir de 24h de données (pour lisser le cycle jour/nuit). Ce n'est pas une prédiction fiable : un jeu Roblox peut exploser ou s'effondrer en un week-end."}
+    </div>
+
+    <div class="stitle">Groupe & communauté</div>
+    <div class="group-box">
+      <div>
+        <div style="font-weight:700">${g.creator?.type==="Group" ? esc(g.discord?.group?.name || g.creator.name) : esc(g.creator?.name||"?") + " (compte utilisateur, pas de groupe)"}</div>
+        <div style="color:var(--mut);font-size:12px">${g.creator?.type==="Group" && g.discord?.group ? fmt(g.discord.group.members) + " membres" : ""}</div>
+      </div>
+      ${g.discord?.has
+        ? `<a class="discord-link" href="${g.discord.url}" target="_blank">💬 Serveur Discord du groupe</a>`
+        : `<span class="no-discord">${g.creator?.type==="Group" ? "Aucun lien Discord détecté dans le groupe" : "—"}</span>`}
+    </div>
+
+    <div class="stitle">Description</div>
+    <div class="desc">${esc(g.desc) || "Pas de description."}</div>
+
+    <a class="play-link" href="https://www.roblox.com/games/${g.placeId}" target="_blank">▶ Voir sur Roblox</a>
+  `;
+  document.getElementById("overlay").classList.add("open");
+  drawModalCharts(g, uid);
+  loadHist(uid).then(() => { if (openId === uid) drawModalCharts(g, uid); });
+
+}
+function drawModalCharts(g, uid) {
+  const out6 = sixMonthOutlook(g, investAnalysis(g));
+  const P = buildProjection(g);
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById("histChart"), {
+    type: "line",
+    data: {
+      labels: P.labels,
+      datasets: [
+        { label: "Historique réel", data: P.hist, borderColor: "#35c9a2",
+          backgroundColor: "rgba(53,201,162,.12)", fill: true, tension: .3,
+          pointRadius: P.hist.filter(v=>v!=null).length > 40 ? 0 : 3, spanGaps: false },
+        { label: "haut", data: P.hi, borderColor: "transparent", pointRadius: 0, fill: false },
+        { label: "Marge d'incertitude", data: P.lo, borderColor: "transparent", pointRadius: 0,
+          backgroundColor: "rgba(74,125,255,.14)", fill: "-1" },
+        { label: "Projection (estimation)", data: P.proj, borderColor: "#4a7dff",
+          borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false, tension: .3 },
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: "#8b95a9", boxWidth: 14, font: { size: 10 },
+        filter: item => item.text !== "haut" } } },
+      scales: { x: { ticks: { color: "#8b95a9", maxTicksLimit: 9 }, grid: { color: "#262e40" } },
+                y: { ticks: { color: "#8b95a9" }, grid: { color: "#262e40" }, beginAtZero: true } } }
+  });
+
+  /* 📅 trajectoire 6 mois : joueurs (ligne) + revenus mensuels estimés (barres, axe droit) */
+  if (chart2) chart2.destroy();
+  const revMidM = out6.revLoM.map((v, i) => Math.round((v + out6.revHiM[i]) / 2));
+  chart2 = new Chart(document.getElementById("sixChart"), {
+    data: {
+      labels: ["Aujourd'hui", "M+1", "M+2", "M+3", "M+4", "M+5", "M+6"],
+      datasets: [
+        { type: "bar", label: "Revenus/mois est. (R$, milieu de fourchette)", data: [null, ...revMidM],
+          backgroundColor: "rgba(255,193,77,.35)", borderColor: "rgba(255,193,77,.8)", borderWidth: 1, yAxisID: "y2" },
+        { type: "line", label: "Joueurs actifs estimés", data: out6.ccuM, borderColor: "#35c9a2",
+          backgroundColor: "rgba(53,201,162,.10)", fill: true, tension: .35, pointRadius: 4, yAxisID: "y" },
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: "#8b95a9", boxWidth: 14, font: { size: 10 } } },
+        tooltip: { callbacks: { label: c => c.dataset.type === "bar" ? "≈ " + fmt(c.raw) + " R$ (" + fmt(Math.round(c.raw*R2USD)) + " $)" : fmt(c.raw) + " joueurs" } } },
+      scales: {
+        x: { ticks: { color: "#8b95a9" }, grid: { color: "#262e40" } },
+        y: { position: "left", ticks: { color: "#35c9a2" }, grid: { color: "#262e40" }, beginAtZero: true, title: { display: true, text: "Joueurs", color: "#35c9a2", font: { size: 10 } } },
+        y2: { position: "right", ticks: { color: "#ffc14d", callback: v => fmt(v) }, grid: { drawOnChartArea: false }, beginAtZero: true, title: { display: true, text: "R$/mois", color: "#ffc14d", font: { size: 10 } } },
+      } }
+  });
+
+}
+
+function closeModal(){ document.getElementById("overlay").classList.remove("open"); openId = null; }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+document.getElementById("addInput").addEventListener("keydown", e => { if (e.key === "Enter") addGame(); });
+
+/* ---------- démarrage + auto-actualisation (60 s) + compte à rebours ---------- */
+loadStore();
+if (games.length) { rebuildNameFreq(); render(); } // affichage immédiat de l'univers sauvegardé
+refreshAll(false);
+setInterval(() => refreshAll(false), 60000);
+setInterval(() => {
+  const el = document.getElementById("countdown");
+  if (!el) return;
+  if (refreshBusy) { el.textContent = "⟳ actualisation…"; return; }
+  const remain = Math.max(0, Math.round(60 - (Date.now() - lastRefresh) / 1000));
+  el.textContent = "prochaine maj : " + remain + " s";
+}, 1000);
+</script>
+</body>
+</html>
