@@ -67,9 +67,10 @@ state.run++;
 /* ---------- 1) DÉCOUVERTE ---------- */
 const sid = crypto.randomUUID();
 const found = new Map(); // uid -> label
-const harvest = (arr, label) => (arr || []).forEach(g => {
-  const uid = g.universeId || g.universeID || g.id;
-  if (uid && !found.has(uid)) found.set(uid, label);
+const okUid = v => { const n = Number(v); return Number.isInteger(n) && n > 0 && n < 1e12; };
+const harvest = (arr, label, allowId = false) => (arr || []).forEach(g => {
+  const uid = g.universeId ?? g.universeID ?? (allowId ? g.id : null);
+  if (okUid(uid) && !found.has(Number(uid))) found.set(Number(uid), label);
 });
 async function deepSort(sortId, label, pages) {
   let token = "";
@@ -104,14 +105,14 @@ try {
   const picked = SEEDS.slice(state.run % 4 * 5, state.run % 4 * 5 + 5);
   await pMap(picked, async q => {
     const d = await jget("apis", `/search-api/omni-search?searchQuery=${encodeURIComponent(q)}&sessionId=${sid}&pageType=all`);
-    (d?.searchResults || []).forEach(sr => harvest(sr.contents, "🔎 " + q));
+    (d?.searchResults || []).forEach(sr => harvest((sr.contents || []).filter(c => c.universeId), "🔎 " + q));
   }, 4);
   /* radar : recommandations depuis les jeux jeunes de l'univers */
   const young = Object.values(universe).filter(g => (now - new Date(g.created)) / 864e5 < 45)
     .sort((a, b) => new Date(b.created) - new Date(a.created)).slice(0, 30);
   await pMap(young, async g => {
     const j = await jget("games", `/v1/games/recommendations/game/${g.universeId}?maxRows=12`);
-    harvest(j?.games || j?.data, "🧭 Radar");
+    harvest(j?.games || j?.data, "🧭 Radar", true);
   }, 5);
 } catch (e) { console.error("découverte:", e.message); }
 console.log("découverte:", found.size, "jeux vus");
@@ -128,7 +129,7 @@ if (found.size < 100) {
     const before = found.size;
     await pMap(seedUids.concat([...found.keys()].slice(-40)), async uid => {
       const j = await jget("games", `/v1/games/recommendations/game/${uid}?maxRows=12`);
-      harvest(j?.games || j?.data, "🧭 Radar");
+      harvest(j?.games || j?.data, "🧭 Radar", true);
     }, 5);
     console.log("secours saut", hop + 1, ":", found.size, "jeux (", found.size - before, "nouveaux )");
   }
@@ -158,11 +159,23 @@ if (rest.length) {
 const uids = [...priority, ...rot].slice(0, RUN_BUDGET);
 console.log("à rafraîchir:", uids.length, "(priorité:", priority.length, ")");
 
-/* ---------- 3) STATS + VOTES ---------- */
-const chunks = []; for (let i = 0; i < uids.length; i += 60) chunks.push(uids.slice(i, i + 60));
-const gd = (await pMap(chunks, c => jget("games", `/v1/games?universeIds=${c.join(",")}`), 8)).flatMap(p => p?.data || []);
-const vd = (await pMap(chunks, c => jget("games", `/v1/games/votes?universeIds=${c.join(",")}`), 8)).flatMap(p => p?.data || []);
+/* ---------- 3) STATS + VOTES (lots résilients : un lot rejeté est coupé en deux
+   récursivement pour isoler un éventuel identifiant invalide) ---------- */
+const cleanUids = [...new Set(uids.map(Number).filter(okUid))];
+async function fetchChunk(path, c, out) {
+  const j = await jget("games", `${path}${c.join(",")}`);
+  if (j?.data) { out.push(...j.data); return; }
+  if (c.length <= 8) return; // petit lot irrécupérable : on l'abandonne
+  const mid = c.length >> 1;
+  await fetchChunk(path, c.slice(0, mid), out);
+  await fetchChunk(path, c.slice(mid), out);
+}
+const chunks = []; for (let i = 0; i < cleanUids.length; i += 50) chunks.push(cleanUids.slice(i, i + 50));
+const gd = [], vd = [];
+await pMap(chunks, c => fetchChunk("/v1/games?universeIds=", c, gd), 8);
+await pMap(chunks, c => fetchChunk("/v1/games/votes?universeIds=", c, vd), 8);
 const votes = {}; vd.forEach(v => votes[v.id] = v);
+console.log("stats reçues:", gd.length, "/", cleanUids.length);
 if (!gd.length) { console.error("Aucune donnée reçue — abandon du run."); process.exit(0); }
 
 /* ---------- 4) FUSION UNIVERS + HISTORIQUE ---------- */
